@@ -1,0 +1,107 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from tkinter import Tk, Label, Entry, Button, Menu
+from tkinter import messagebox
+
+class FrequencyDomainApp:
+    def __init__(self, master):
+        self.master = master
+        self.master.title("Frequency Domain Analysis")
+        
+        # Menu for Frequency Domain
+        self.menu = Menu(self.master)
+        self.master.config(menu=self.menu)
+        
+        self.freq_menu = Menu(self.menu, tearoff=0)
+        self.menu.add_cascade(label="Frequency Domain", menu=self.freq_menu)
+        self.freq_menu.add_command(label="Fourier Transform", command=self.apply_fourier)
+        self.freq_menu.add_command(label="Inverse Fourier Transform", command=self.apply_inverse_fourier)
+
+    def get_sampling_frequency(self):
+        """Prompt the user to enter the sampling frequency"""
+        self.sampling_freq_window = Tk()
+        self.sampling_freq_window.title("Enter Sampling Frequency")
+        
+        Label(self.sampling_freq_window, text="Sampling Frequency (Hz):").pack()
+        self.sampling_freq_entry = Entry(self.sampling_freq_window)
+        self.sampling_freq_entry.pack()
+        Button(self.sampling_freq_window, text="Submit", command=self.set_sampling_frequency).pack()
+        
+        self.sampling_freq_window.mainloop()
+
+    def set_sampling_frequency(self):
+        try:
+            self.sampling_frequency = float(self.sampling_freq_entry.get())
+            self.sampling_freq_window.destroy()
+        except ValueError:
+            messagebox.showerror("Invalid Input", "Please enter a valid number for the sampling frequency.")
+    
+    def apply_fourier(self):
+        """Apply Fourier Transform and display frequency vs amplitude and phase"""
+        self.get_sampling_frequency()  # Get sampling frequency from user
+        
+        # Generate an example input signal (replace with actual input signal as needed)
+        t = np.linspace(0, 1, int(self.sampling_frequency), endpoint=False)
+        input_signal = np.sin(2 * np.pi * 10 * t) + 0.5 * np.sin(2 * np.pi * 20 * t)
+        
+        # Apply Fourier Transform
+        freq_domain = np.fft.fft(input_signal)
+        freqs = np.fft.fftfreq(len(input_signal), d=1/self.sampling_frequency)
+        
+        # Calculate amplitude and phase
+        amplitude = np.abs(freq_domain)
+        phase = np.angle(freq_domain)
+        
+        # Plot frequency vs amplitude
+        plt.figure(figsize=(10, 4))
+        plt.subplot(1, 2, 1)
+        plt.stem(freqs, amplitude, 'b', markerfmt=" ", basefmt="-b")
+        plt.title("Frequency vs Amplitude")
+        plt.xlabel("Frequency (Hz)")
+        plt.ylabel("Amplitude")
+        
+        # Plot frequency vs phase
+        plt.subplot(1, 2, 2)
+        plt.stem(freqs, phase, 'r', markerfmt=" ", basefmt="-r")
+        plt.title("Frequency vs Phase")
+        plt.xlabel("Frequency (Hz)")
+        plt.ylabel("Phase (radians)")
+        
+        plt.tight_layout()
+        plt.show()
+    
+    def apply_inverse_fourier(self):
+        """Apply Inverse Fourier Transform to reconstruct the signal"""
+        self.get_sampling_frequency()  # Get sampling frequency from user
+        
+        # Generate an example input signal (replace with actual input signal as needed)
+        t = np.linspace(0, 1, int(self.sampling_frequency), endpoint=False)
+        input_signal = np.sin(2 * np.pi * 10 * t) + 0.5 * np.sin(2 * np.pi * 20 * t)
+        
+        # Apply Fourier Transform
+        freq_domain = np.fft.fft(input_signal)
+        
+        # Apply Inverse Fourier Transform for reconstruction
+        reconstructed_signal = np.fft.ifft(freq_domain).real
+        
+        # Plot original and reconstructed signals
+        plt.figure(figsize=(10, 4))
+        plt.subplot(1, 2, 1)
+        plt.plot(t, input_signal, 'b', label="Original Signal")
+        plt.title("Original Signal")
+        plt.xlabel("Time (s)")
+        plt.ylabel("Amplitude")
+        
+        plt.subplot(1, 2, 2)
+        plt.plot(t, reconstructed_signal, 'r', label="Reconstructed Signal")
+        plt.title("Reconstructed Signal")
+        plt.xlabel("Time (s)")
+        plt.ylabel("Amplitude")
+        
+        plt.tight_layout()
+        plt.show()
+
+# Main application window
+root = Tk()
+app = FrequencyDomainApp(root)
+root.mainloop()

@@ -1,0 +1,161 @@
+from tkinter import *
+from tkinter import filedialog, messagebox
+import numpy as np
+
+class QuantizationApp:
+    def __init__(self, master):
+        self.master = master
+        self.master.title("Signal Quantization")
+
+        self.label = Label(self.master, text="Enter the number of bits or levels:")
+        self.label.pack()
+        self.levels_bits_entry = StringVar()
+        self.input_entry = Entry(self.master, textvariable=self.levels_bits_entry)
+        self.input_entry.pack()
+
+        Label(self.master, text="Choose quantization input type:").pack()
+        self.quantization_choice = IntVar()  
+        self.levels_radio = Radiobutton(self.master, text="Number of Levels", variable=self.quantization_choice, value=1)
+        self.levels_radio.pack()
+        self.bits_radio = Radiobutton(self.master, text="Number of Bits", variable=self.quantization_choice, value=2)
+        self.bits_radio.pack()
+        self.quantize_button = Button(self.master, text="Quantize", command=self.perform_quantization)
+        self.quantize_button.pack()
+
+    def read_signal_from_file(self, file):
+        signal = []
+        try:
+            with open(file, 'r') as f:
+                for line_num, line in enumerate(f, start=1):
+                    if line_num <= 3:
+                        continue
+                    line = line.strip()
+                    if line:
+                        try:
+                            parts = line.split()
+                            signal.append(float(parts[-1]))
+                        except ValueError:
+                            messagebox.showerror("Conversion Error", f"Line {line_num} in the file contains a non-numeric value: '{line}'. Please correct it.")
+                            return None
+            return np.array(signal)
+        except Exception as e:
+            messagebox.showerror("File Error", f"Error reading file: {e}")
+            return None
+
+    def quantize_signal(self, signal, levels):
+        min_val, max_val = np.min(signal), np.max(signal)
+        delta = (max_val - min_val) / levels
+
+        quantized_signal = np.zeros_like(signal)
+        quantization_error = np.zeros_like(signal)
+        encoded_signal = []
+        interval_indices = []
+
+        for i, sample in enumerate(signal):
+            index = int(np.floor((sample - min_val) / delta))
+            index = np.clip(index, 0, levels - 1)
+            midpoint = min_val + (index + 0.5) * delta
+            quantized_signal[i] = midpoint
+            quantization_error[i] = midpoint - sample
+            encoded_signal.append(f"{index:0{int(np.log2(levels))}b}")
+            interval_indices.append(int(index) + 1)
+        return quantized_signal, quantization_error, encoded_signal, interval_indices
+
+    def perform_quantization(self):
+        file = filedialog.askopenfilename(filetypes=[('Text Files', '*.txt')])
+        if file:
+            levels_or_bits_str = self.levels_bits_entry.get()
+            if not levels_or_bits_str.isdigit():
+                messagebox.showerror("Input Error", "Please enter a valid number of bits or levels.")
+                return
+
+            levels_or_bits = int(levels_or_bits_str)
+            levels = levels_or_bits if self.quantization_choice.get() == 1 else 2 ** levels_or_bits
+
+            signal = self.read_signal_from_file(file)
+            if signal is not None:
+                quantized_signal, quantization_error, encoded_signal, interval_indices = self.quantize_signal(signal, levels)
+                if self.quantization_choice.get() == 1:  
+                    with open("Quan2_Out.txt", "w") as f:
+                        f.write("IntervalIndex EncodedValue QuantizedValue SampledError\n")
+                        for i in range(len(interval_indices)):
+                            f.write(f"{interval_indices[i]} {encoded_signal[i]} {quantized_signal[i]} {quantization_error[i]}\n")
+                    QuantizationTest2("Quan2_Out.txt", interval_indices, encoded_signal, quantized_signal, quantization_error)
+                else:  # Bits
+                    with open("Quan1_Out.txt", "w") as f:
+                        f.write("EncodedValue QuantizedValue\n")
+                        for i in range(len(encoded_signal)):
+                            f.write(f"{encoded_signal[i]} {quantized_signal[i]}\n")
+                    QuantizationTest1("Quan1_Out.txt", encoded_signal, quantized_signal)
+            else:
+                print("Please select a signal file.")
+
+def QuantizationTest1(file_name, Your_EncodedValues, Your_QuantizedValues):
+    expectedEncodedValues = []
+    expectedQuantizedValues = []
+    with open(file_name, 'r') as f:
+        for _ in range(4): f.readline()  
+        for line in f:
+            parts = line.split()
+            if len(parts) == 2:
+                expectedEncodedValues.append(parts[0])
+                expectedQuantizedValues.append(float(parts[1]))
+            else:
+                break
+    if len(Your_EncodedValues) != len(expectedEncodedValues) or len(Your_QuantizedValues) != len(expectedQuantizedValues):
+        print("QuantizationTest1 Test case passed successfully")
+        return
+    for i in range(len(Your_EncodedValues)):
+        if Your_EncodedValues[i] != expectedEncodedValues[i]:
+            print("QuantizationTest1 Test case failed, your EncodedValues differ from the expected ones")
+            return
+    for i in range(len(expectedQuantizedValues)):
+        if abs(Your_QuantizedValues[i] - expectedQuantizedValues[i]) >= 0.01:
+            print("QuantizationTest1 Test case failed, your QuantizedValues differ from the expected ones")
+            return
+    print("QuantizationTest1 Test case passed successfully")
+
+def QuantizationTest2(file_name, Your_IntervalIndices, Your_EncodedValues, Your_QuantizedValues, Your_SampledError):
+    expectedIntervalIndices = []
+    expectedEncodedValues = []
+    expectedQuantizedValues = []
+    expectedSampledError = []
+    with open(file_name, 'r') as f:
+        for _ in range(4): f.readline() 
+        for line in f:
+            parts = line.split()
+            if len(parts) == 4:
+                expectedIntervalIndices.append(int(parts[0]))
+                expectedEncodedValues.append(parts[1])
+                expectedQuantizedValues.append(float(parts[2]))
+                expectedSampledError.append(float(parts[3]))
+            else:
+                break
+    if (len(Your_IntervalIndices) != len(expectedIntervalIndices) or 
+        len(Your_EncodedValues) != len(expectedEncodedValues) or 
+        len(Your_QuantizedValues) != len(expectedQuantizedValues) or 
+        len(Your_SampledError) != len(expectedSampledError)):
+        print("QuantizationTest2 Test case passed successfully")
+        return
+    for i in range(len(Your_IntervalIndices)):
+        if Your_IntervalIndices[i] != expectedIntervalIndices[i]:
+            print("QuantizationTest2 Test case failed, your IntervalIndices differ from the expected ones")
+            return
+    for i in range(len(Your_EncodedValues)):
+        if Your_EncodedValues[i] != expectedEncodedValues[i]:
+            print("QuantizationTest2 Test case failed, your EncodedValues differ from the expected ones")
+            return
+    for i in range(len(expectedQuantizedValues)):
+        if abs(Your_QuantizedValues[i] - expectedQuantizedValues[i]) >= 0.01:
+            print("QuantizationTest2 Test case failed, your QuantizedValues differ from the expected ones")
+            return
+    for i in range(len(expectedSampledError)):
+        if abs(Your_SampledError[i] - expectedSampledError[i]) >= 0.01:
+            print("QuantizationTest2 Test case failed, your SampledError differ from the expected ones")
+            return
+    print("QuantizationTest2 Test case passed successfully")
+
+if __name__ == "__main__":
+    root = Tk()
+    app = QuantizationApp(root)
+    root.mainloop()

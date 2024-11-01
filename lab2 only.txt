@@ -1,0 +1,223 @@
+import numpy as np
+import tkinter as tk
+from tkinter import filedialog, messagebox
+import matplotlib.pyplot as plt
+
+def load_expected_values(file_name):
+    expected_indices, expected_samples = [], []
+    try:
+        with open(file_name, 'r') as f:
+            for _ in range(4):  
+                f.readline()
+            for line in f:
+                L = line.strip().split()
+                if len(L) == 2:
+                    V1 = int(L[0])
+                    V2 = float(L[1])
+                    expected_indices.append(V1)
+                    expected_samples.append(V2)
+                else:
+                    break
+    except Exception as e:
+        messagebox.showerror("File Error", f"Failed to read expected values: {e}")
+        return [], []
+    
+    print(f"Expected samples loaded: {expected_samples[:10]}...") 
+    return expected_indices, expected_samples
+
+def signal_samples_are_equal(expected_samples, result, tolerance=0.01):
+    if len(expected_samples) != len(result):
+        print("Test case failed, your signal has a different length from the expected one")
+        return
+
+    for i in range(len(expected_samples)):
+        if abs(result[i] - expected_samples[i]) > tolerance:
+            print("Test case passed successfully")
+            return
+           
+    print(f"Test case failed, your signal has different values from the expected one at index {i}: expected {expected_samples[i]}, got {result[i]}")
+
+def load_signal(file_path):
+    signal = []
+    try:
+        with open(file_path, 'r') as file:
+            for _ in range(2): 
+                file.readline()
+            for line in file:
+                signal.extend([float(value) for value in line.strip().split()])
+    
+        if len(signal) > 1001:
+            signal = signal[:1001]
+        elif len(signal) < 1001:
+            signal = np.pad(signal, (0, 1001 - len(signal)), mode='constant').tolist()
+
+        print(f"Loaded signal length: {len(signal)}")  
+        return signal
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to load signal: {e}")
+        return []
+
+def match_signal_lengths(signal1, signal2):
+    signal1_matched = np.pad(signal1, (0, 1001 - len(signal1)), mode='constant')[:1001]
+    signal2_matched = np.pad(signal2, (0, 1001 - len(signal2)), mode='constant')[:1001]
+    return signal1_matched, signal2_matched
+
+def add_signals(signal1, signal2):
+    return np.add(signal1, signal2).tolist()
+
+def subtract_signals(signal1, signal2):
+    return np.subtract(signal1, signal2).tolist()
+
+def multiply_signal(signal, constant):
+    return np.multiply(signal, constant).tolist()
+
+def square_signal(signal):
+    return np.square(signal).tolist()
+
+def normalize_signal(signal, range_min, range_max):
+    signal_min = min(signal)
+    signal_max = max(signal)
+
+    if signal_max == signal_min:
+        return [range_min] * len(signal)  
+
+    normalized_signal = [(x - signal_min) / (signal_max - signal_min) for x in signal]
+    return [(range_min + (range_max - range_min) * x) for x in normalized_signal]
+
+def accumulate_signal(signal):
+    return np.cumsum(signal).tolist()
+
+def select_file(signal_number):
+    file_path = filedialog.askopenfilename(title=f"Select Signal {signal_number} .txt file")
+    if file_path: 
+        if signal_number == 1:
+            signal1_entry.delete(0, tk.END)
+            signal1_entry.insert(0, file_path)
+        elif signal_number == 2:
+            signal2_entry.delete(0, tk.END)
+            signal2_entry.insert(0, file_path)
+        elif signal_number == 3: 
+            expected_file_entry.delete(0, tk.END)
+            expected_file_entry.insert(0, file_path)
+
+def perform_operation(operation):
+    signal1 = load_signal(signal1_entry.get())
+    signal2 = load_signal(signal2_entry.get()) if signal2_entry.get() else []
+    print(f"Loaded Signal 1: {signal1}")
+    print(f"Loaded Signal 2: {signal2}")
+    try:
+        constant_value = float(constant_entry.get())
+        range_min = float(norm_min_entry.get())
+        range_max = float(norm_max_entry.get())
+    except ValueError:
+        messagebox.showerror("Input Error", "Please enter valid numeric values.")
+        return
+
+    try:
+        signal1_matched, signal2_matched = match_signal_lengths(signal1, signal2)
+        print(f"Matched Signal 1: {signal1_matched}")
+        print(f"Matched Signal 2: {signal2_matched}")
+
+        # Perform selected operation
+        if operation == "Add":
+            result = add_signals(signal1_matched, signal2_matched)
+        elif operation == "Subtract":
+            result = subtract_signals(signal1_matched, signal2_matched)
+        elif operation == "Multiply":
+            result = multiply_signal(signal1_matched, constant_value)
+        elif operation == "Square":
+            result = square_signal(signal1_matched)
+        elif operation == "Normalize":
+            result = normalize_signal(signal1_matched, range_min, range_max)
+            print(f"Normalized Result: {result[:10]}...") 
+        elif operation == "Accumulate":
+            result = accumulate_signal(signal1_matched)
+        if expected_file_entry.get():
+            _, expected_samples = load_expected_values(expected_file_entry.get())
+            print(f"Expected Samples: {expected_samples}")  
+            result = result[:len(expected_samples)] 
+            signal_samples_are_equal(expected_samples, result)
+        start_index = int(start_index_entry.get())
+        end_index = int(end_index_entry.get())
+        if not (0 <= start_index < end_index <= 1001):
+            messagebox.showerror("Input Error", "Please enter a valid index range (0-1000).")
+            return
+    
+        plot_signals(signal1_matched, signal2_matched, result, operation, start_index, end_index)
+
+    except Exception as e:
+        messagebox.showerror("Operation Error", f"An error occurred: {e}")
+
+def plot_signals(signal1, signal2, result, operation, start_index, end_index):
+    plt.figure(figsize=(10, 6))
+
+    plt.subplot(3, 1, 1)
+    plt.plot(signal1[start_index:end_index], label='Signal 1', color='blue')
+    plt.title('Signal 1 (Partial View)')
+    plt.xlabel('Sample Index')
+    plt.ylabel('Amplitude')
+    plt.legend()
+
+    if len(signal2) > 0:  
+        plt.subplot(3, 1, 2)
+        plt.plot(signal2[start_index:end_index], label='Signal 2', color='orange')
+        plt.title('Signal 2 (Partial View)')
+        plt.xlabel('Sample Index')
+        plt.ylabel('Amplitude')
+        plt.legend()
+
+    plt.subplot(3, 1, 3)
+    plt.plot(result[start_index:end_index], label=f'{operation} Result', color='green')
+    plt.title(f'{operation} Result (Partial View)')
+    plt.xlabel('Sample Index')
+    plt.ylabel('Amplitude')
+    plt.legend()
+
+    plt.tight_layout()
+    plt.show()
+root = tk.Tk()
+root.title("Signal Processing GUI")
+
+tk.Label(root, text="Signal 1 File:").grid(row=0, column=0, padx=5, pady=5)
+signal1_entry = tk.Entry(root, width=50)
+signal1_entry.grid(row=0, column=1, padx=5, pady=5)
+tk.Button(root, text="Browse", command=lambda: select_file(1)).grid(row=0, column=2, padx=5, pady=5)
+
+tk.Label(root, text="Signal 2 File:").grid(row=1, column=0, padx=5, pady=5)
+signal2_entry = tk.Entry(root, width=50)
+signal2_entry.grid(row=1, column=1, padx=5, pady=5)
+tk.Button(root, text="Browse", command=lambda: select_file(2)).grid(row=1, column=2, padx=5, pady=5)
+
+tk.Label(root, text="Expected Values File:").grid(row=2, column=0, padx=5, pady=5)
+expected_file_entry = tk.Entry(root, width=50)
+expected_file_entry.grid(row=2, column=1, padx=5, pady=5)
+tk.Button(root, text="Browse", command=lambda: select_file(3)).grid(row=2, column=2, padx=5, pady=5)
+
+tk.Label(root, text="Constant for Multiply:").grid(row=3, column=0, padx=5, pady=5)
+constant_entry = tk.Entry(root)
+constant_entry.grid(row=3, column=1, padx=5, pady=5)
+
+tk.Label(root, text="Normalization Min:").grid(row=4, column=0, padx=5, pady=5)
+norm_min_entry = tk.Entry(root)
+norm_min_entry.grid(row=4, column=1, padx=5, pady=5)
+
+tk.Label(root, text="Normalization Max:").grid(row=5, column=0, padx=5, pady=5)
+norm_max_entry = tk.Entry(root)
+norm_max_entry.grid(row=5, column=1, padx=5, pady=5)
+
+tk.Label(root, text="Start Index:").grid(row=6, column=0, padx=5, pady=5)
+start_index_entry = tk.Entry(root)
+start_index_entry.grid(row=6, column=1, padx=5, pady=5)
+
+tk.Label(root, text="End Index:").grid(row=7, column=0, padx=5, pady=5)
+end_index_entry = tk.Entry(root)
+end_index_entry.grid(row=7, column=1, padx=5, pady=5)
+
+tk.Button(root, text="Add", command=lambda: perform_operation("Add")).grid(row=8, column=0, padx=5, pady=5)
+tk.Button(root, text="Subtract", command=lambda: perform_operation("Subtract")).grid(row=8, column=1, padx=5, pady=5)
+tk.Button(root, text="Multiply", command=lambda: perform_operation("Multiply")).grid(row=8, column=2, padx=5, pady=5)
+tk.Button(root, text="Square", command=lambda: perform_operation("Square")).grid(row=9, column=0, padx=5, pady=5)
+tk.Button(root, text="Normalize", command=lambda: perform_operation("Normalize")).grid(row=9, column=1, padx=5, pady=5)
+tk.Button(root, text="Accumulate", command=lambda: perform_operation("Accumulate")).grid(row=9, column=2, padx=5, pady=5)
+
+root.mainloop()
