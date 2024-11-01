@@ -1,0 +1,235 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import tkinter as tk
+from tkinter import filedialog, messagebox
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from tkinter import ttk  # Import for Notebook widget
+
+# Signal processing functions for Lab 1
+def read_signal_from_file(filename):
+    """Reads signal samples from a text file and returns them as a NumPy array."""
+    samples = []
+    try:
+        with open(filename, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith('#') or not line:
+                    continue 
+                try:
+                    values = line.split()
+                    if len(values) < 2: 
+                        continue
+                    samples.append(float(values[1]))  
+                except ValueError:
+                    print(f"Error reading line: {line}")  
+    except FileNotFoundError:
+        print(f"Error: The file {filename} was not found.")  
+    return np.array(samples)
+
+def plot_continuous_signal(samples, sampling_rate, t_start=0, t_end=None):
+    """Plots the continuous representation of a signal using linear interpolation."""
+    if t_end is None:
+        t_end = len(samples) / sampling_rate  # Set end time based on sample length
+    t = np.linspace(t_start, t_end, num=len(samples))  # Create time array
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.plot(t, samples, label='Continuous Signal')
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("Amplitude")
+    ax.set_title("Continuous Signal")
+    ax.grid(True)
+    ax.legend()
+    return fig
+
+def plot_discrete_signal(samples):
+    """Plots the discrete representation of a signal."""
+    n = np.arange(len(samples))  
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.stem(n, samples, basefmt=' ')
+    ax.set_xlabel("Sample Number")
+    ax.set_ylabel("Amplitude")
+    ax.set_title("Discrete Signal")
+    ax.grid(True)
+    return fig
+
+# GUI functions for Lab 1
+def load_file():
+    """Opens a file dialog to select the signal file."""
+    filename = filedialog.askopenfilename(title="Select Signal File", filetypes=[("Text files", "*.txt")])
+    if filename:
+        global samples
+        samples = read_signal_from_file(filename)
+        if samples.size > 0:
+            plot_signals(samples)
+        else:
+            messagebox.showerror("Error", "No valid samples found in the file.")
+
+def plot_signals(samples):
+    """Plots both continuous and discrete signals."""
+    try:
+        sampling_rate = int(sampling_rate_entry.get())
+        if sampling_rate <= 0:
+            raise ValueError
+    except ValueError:
+        messagebox.showerror("Error", "Please enter a valid positive integer for the sampling rate.")
+        return
+    
+    global continuous_plot_canvas, discrete_plot_canvas
+    
+    if continuous_plot_canvas.get_tk_widget().winfo_exists():
+        continuous_plot_canvas.get_tk_widget().grid_forget()
+    if discrete_plot_canvas.get_tk_widget().winfo_exists():
+        discrete_plot_canvas.get_tk_widget().grid_forget()
+
+    fig1 = plot_continuous_signal(samples, sampling_rate)
+    continuous_plot_canvas = FigureCanvasTkAgg(fig1, master=frame1)
+    continuous_plot_canvas.draw()
+    continuous_plot_canvas.get_tk_widget().grid(row=3, column=0, columnspan=2)
+
+    fig2 = plot_discrete_signal(samples)
+    discrete_plot_canvas = FigureCanvasTkAgg(fig2, master=frame1)
+    discrete_plot_canvas.draw()
+    discrete_plot_canvas.get_tk_widget().grid(row=4, column=0, columnspan=2)
+
+# Signal processing functions for Lab 2
+def load_signal(file_path):
+    signal = []
+    try:
+        with open(file_path, 'r') as file:
+            for line in file:
+                signal.extend([float(value) for value in line.strip().split()])
+        return signal
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to load signal: {e}")
+        return []
+
+def add_signals(signal1, signal2):
+    return np.add(signal1, signal2).tolist()
+
+def subtract_signals(signal1, signal2):
+    return np.subtract(signal1, signal2).tolist()
+
+def multiply_signal(signal, constant):
+    return np.multiply(signal, constant).tolist()
+
+def square_signal(signal):
+    return np.square(signal).tolist()
+
+def normalize_signal(signal, range_min, range_max):
+    signal_min = min(signal)
+    signal_max = max(signal)
+    normalized_signal = [(x - signal_min) / (signal_max - signal_min) for x in signal]
+    return [(range_min + (range_max - range_min) * x) for x in normalized_signal]
+
+def accumulate_signal(signal):
+    return np.cumsum(signal).tolist()
+
+def select_file(signal_number):
+    file_path = filedialog.askopenfilename(title=f"Select Signal {signal_number} .txt file")
+    if signal_number == 1:
+        signal1_entry.delete(0, tk.END)
+        signal1_entry.insert(0, file_path)
+    else:
+        signal2_entry.delete(0, tk.END)
+        signal2_entry.insert(0, file_path)
+
+def perform_operation(operation):
+    signal1 = load_signal(signal1_entry.get())
+    signal2 = load_signal(signal2_entry.get()) if signal2_entry.get() else []
+    
+    if constant_entry.get() == "":
+        messagebox.showerror("Input Error", "Please enter a constant value.")
+        return
+
+    constant_value = float(constant_entry.get())
+
+    if norm_min_entry.get() == "" or norm_max_entry.get() == "":
+        messagebox.showerror("Input Error", "Please enter normalization min and max values.")
+        return
+
+    range_min = float(norm_min_entry.get())
+    range_max = float(norm_max_entry.get())
+
+    try:
+        if operation == "Add":
+            result = add_signals(signal1, signal2)
+        elif operation == "Subtract":
+            result = subtract_signals(signal1, signal2)
+        elif operation == "Multiply":
+            result = multiply_signal(signal1, constant_value)
+        elif operation == "Square":
+            result = square_signal(signal1)
+        elif operation == "Normalize":
+            result = normalize_signal(signal1, range_min, range_max)
+        elif operation == "Accumulate":
+            result = accumulate_signal(signal1)
+
+        messagebox.showinfo("Result", f"{operation} Result:\n{result}")
+    except Exception as e:
+        messagebox.showerror("Operation Error", f"An error occurred: {e}")
+
+# Create the main window
+root = tk.Tk()
+root.title("Signal Processing GUI")
+
+# Create a Notebook widget for tabs
+notebook = ttk.Notebook(root)
+
+# Create frames for each task
+frame1 = ttk.Frame(notebook)
+frame2 = ttk.Frame(notebook)
+
+# Add frames to the Notebook
+notebook.add(frame1, text='Plot Signals')
+notebook.add(frame2, text='Signal Operations')
+
+# Plot Signals GUI elements
+load_file_button = tk.Button(frame1, text="Load Signal File", command=load_file)
+load_file_button.grid(row=0, column=0, padx=10, pady=10)
+
+tk.Label(frame1, text="Sampling Rate:").grid(row=1, column=0, padx=10, pady=10)
+sampling_rate_entry = tk.Entry(frame1)
+sampling_rate_entry.grid(row=1, column=1, padx=10, pady=10)
+sampling_rate_entry.insert(0, "10")  # Default value
+
+plot_button = tk.Button(frame1, text="Plot Signals", command=lambda: plot_signals(samples))
+plot_button.grid(row=2, column=0, columnspan=2, padx=10, pady=10)
+
+# Placeholders for plot canvases
+continuous_plot_canvas = FigureCanvasTkAgg(plt.Figure(), master=frame1)
+discrete_plot_canvas = FigureCanvasTkAgg(plt.Figure(), master=frame1)
+
+# Signal Operations GUI elements
+tk.Label(frame2, text="Signal 1 File:").grid(row=0, column=0, padx=5, pady=5)
+signal1_entry = tk.Entry(frame2, width=40)
+signal1_entry.grid(row=0, column=1, padx=5, pady=5)
+tk.Button(frame2, text="Browse", command=lambda: select_file(1)).grid(row=0, column=2, padx=5, pady=5)
+
+tk.Label(frame2, text="Signal 2 File:").grid(row=1, column=0, padx=5, pady=5)
+signal2_entry = tk.Entry(frame2, width=40)
+signal2_entry.grid(row=1, column=1, padx=5, pady=5)
+tk.Button(frame2, text="Browse", command=lambda: select_file(2)).grid(row=1, column=2, padx=5, pady=5)
+
+tk.Label(frame2, text="Constant:").grid(row=2, column=0, padx=5, pady=5)
+constant_entry = tk.Entry(frame2)
+constant_entry.grid(row=2, column=1, padx=5, pady=5)
+
+tk.Label(frame2, text="Norm Min:").grid(row=3, column=0, padx=5, pady=5)
+norm_min_entry = tk.Entry(frame2)
+norm_min_entry.grid(row=3, column=1, padx=5, pady=5)
+
+tk.Label(frame2, text="Norm Max:").grid(row=4, column=0, padx=5, pady=5)
+norm_max_entry = tk.Entry(frame2)
+norm_max_entry.grid(row=4, column=1, padx=5, pady=5)
+
+tk.Button(frame2, text="Add Signals", command=lambda: perform_operation("Add")).grid(row=5, column=0, padx=5, pady=5)
+tk.Button(frame2, text="Subtract Signals", command=lambda: perform_operation("Subtract")).grid(row=5, column=1, padx=5, pady=5)
+tk.Button(frame2, text="Multiply Signal 1", command=lambda: perform_operation("Multiply")).grid(row=6, column=0, padx=5, pady=5)
+tk.Button(frame2, text="Square Signal 1", command=lambda: perform_operation("Square")).grid(row=6, column=1, padx=5, pady=5)
+tk.Button(frame2, text="Normalize Signal 1", command=lambda: perform_operation("Normalize")).grid(row=7, column=0, padx=5, pady=5)
+tk.Button(frame2, text="Accumulate Signal 1", command=lambda: perform_operation("Accumulate")).grid(row=7, column=1, padx=5, pady=5)
+
+# Pack the Notebook
+notebook.pack(expand=True, fill='both')
+
+# Start the main loop
+root.mainloop()
