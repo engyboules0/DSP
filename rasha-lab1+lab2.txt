@@ -1,0 +1,463 @@
+import tkinter as tk
+from tkinter import simpledialog, filedialog, messagebox
+import numpy as np
+import pandas as pd
+import tkinter as tk
+from tkinter import ttk
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import matplotlib.pyplot as plt
+import numpy as np
+from tkinter import messagebox
+import matplotlib.pyplot as plt
+
+class SignalProcessorApp:
+    def _init_(self, root):
+        self.root = root
+        self.root.title("Signal Processing GUI")
+
+    
+        self.menu_frame = tk.Frame(root, bg="lightgray", width=200)
+        self.menu_frame.pack(side="left", fill="y")
+
+        
+
+        self.upload_button = tk.Button(self.menu_frame, text="Upload Files", command=self.upload_files)
+        self.upload_button.pack(pady=10)
+
+        self.run_button = tk.Button(self.menu_frame, text="Run", state="disabled", command=self.run)
+        self.run_button.pack(pady=10)
+
+        self.operations = ["Plot Signal","Generate Signal","Add","Subtract", "Multiply", "Normalize from -1 to 1", "Normalize from 0 to 1", "Squaring", "Accumulation"]
+        self.operation_buttons = []
+        for op in self.operations:
+            button = tk.Button(self.menu_frame, text=op, command=lambda op=op: self.select_operation(op))
+            button.pack(pady=5)
+            self.operation_buttons.append(button)
+
+        
+        self.canvas = tk.Canvas(root, bg="white")
+        self.canvas.pack(fill="both", expand=True)
+        self.amp_entry = None
+        self.analog_freq_entry = None
+        self.sampling_freq_entry = None
+        self.shift_entry = None
+        self.wave_selector = None
+
+        self.file_data = {}
+        self.results = {}  
+        self.rectangles = {}  
+        self.expected_file_map = {
+            "Add": "signal1+signal2.txt",
+            "Subtract": "signal1-signal2.txt",
+            "Multiply": "MultiplySignalByConstant-Signal1 - by 5.txt",  
+            "Squaring": "Output squaring signal 1.txt",
+            "Normalize from -1 to 1": "normalize of signal 1 (from -1 to 1)-- output.txt",
+            "Normalize from 0 to 1": "normlize signal 2 (from 0 to 1 )-- output.txt",
+            "Accumulation": "output accumulation for signal1.txt",
+            "Generate Signal" :"SinOutput.txt"
+
+        }
+
+        
+        self.fixed_y_positions = [50 + i * 80 for i in range(10)]  
+        self.occupied_positions = [False] * len(self.fixed_y_positions)  
+
+    def upload_files(self):
+        file_paths = filedialog.askopenfilenames()
+        if file_paths:
+            for file_path in file_paths:
+                try:
+                    data = pd.read_csv(file_path, delimiter="\s+", header=None, skiprows=3)
+                    file_index = len(self.file_data) 
+                    file_key = f"file_{file_index}"
+                    self.file_data[file_key] = data
+           
+                    self.create_rectangle(file_key, f"File: {file_path.split('/')[-1]}", file_key=file_key)
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed to load {file_path}: {e}")
+            self.update_run_button_state()
+
+    
+
+
+    def select_operation(self, operation):
+        self.selected_operation = operation
+        self.create_rectangle(operation.lower(), operation)
+        self.update_run_button_state()
+        if self.selected_operation == "Generate Signal":
+          self.show_signal_generation_fields()
+
+   
+
+
+    def update_run_button_state(self):
+        if self.selected_operation in ["Add", "Subtract"]:
+            self.run_button.config(state="normal" if len(self.file_data) >= 2 else "disabled")
+        else:
+            self.run_button.config(state="normal" if len(self.file_data) > 0 else "disabled")
+
+
+
+    def create_rectangle(self, tag, text, file_key=None):
+        """Create a rectangle for uploaded files and operations with a close button."""
+        available_position = self.get_available_position()
+
+        if available_position is not None:
+            rect_y = available_position  
+            rect = self.canvas.create_rectangle(50, rect_y, 300, rect_y + 60, fill="lightblue", outline="blue", width=2, tags=tag)
+            text_id = self.canvas.create_text(175, rect_y + 30, text=text, tags=tag)
+
+    
+            close_button = self.canvas.create_text(290, rect_y + 10, text="X", fill="red", tags=tag, font=("Arial", 12, "bold"))
+            
+          
+            self.canvas.tag_bind(close_button, "<Button-1>", lambda event, t=tag, y=rect_y, fk=file_key: self.delete_rectangle(t, y, fk))
+
+          
+            self.rectangles[tag] = [rect, text_id, close_button]
+            self.occupied_positions[self.fixed_y_positions.index(rect_y)] = True  
+
+    def get_available_position(self):
+        """Get the first available Y position for a rectangle."""
+        for i, occupied in enumerate(self.occupied_positions):
+            if not occupied:
+                return self.fixed_y_positions[i]
+        return None  
+
+    def delete_rectangle(self, tag, y_position, file_key=None):
+        """Delete the rectangle, text, close button, and clear the result data."""
+        for item in self.rectangles[tag]:
+            self.canvas.delete(item)
+        del self.rectangles[tag]  
+        self.occupied_positions[self.fixed_y_positions.index(y_position)] = False
+
+        if tag in self.results:
+            del self.results[tag]
+
+        if file_key and file_key in self.file_data:
+            del self.file_data[file_key]
+
+        if tag == "generate signal":
+            
+            if self.amp_entry:
+                self.amp_entry.destroy()
+                self.amp_entry = None
+            if self.analog_freq_entry:
+                self.analog_freq_entry.destroy()
+                self.analog_freq_entry = None
+            if self.sampling_freq_entry:
+                self.sampling_freq_entry.destroy()
+                self.sampling_freq_entry = None
+            if self.shift_entry:
+                self.shift_entry.destroy()
+                self.shift_entry = None
+            if self.wave_selector:
+                self.wave_selector.destroy()
+                self.wave_selector = None
+            
+            if self.amp_label:
+                self.amp_label.destroy()
+                self.amp_label = None
+            if self.analog_freq_label:
+                self.analog_freq_label.destroy()
+                self.analog_freq_label = None
+            if self.sampling_freq_label:
+                self.sampling_freq_label.destroy()
+                self.sampling_freq_label = None
+            if self.shift_label:
+                self.shift_label.destroy()
+                self.shift_label = None
+            if self.wave_type_label:
+                self.wave_type_label.destroy()
+                self.wave_type_label = None
+
+    
+        self.update_run_button_state()
+
+
+
+    def show_signal_generation_fields(self):
+        """Show input fields for signal generation."""
+        
+        if self.amp_entry:
+            self.amp_entry.destroy()
+        if self.analog_freq_entry:
+            self.analog_freq_entry.destroy()
+        if self.sampling_freq_entry:
+            self.sampling_freq_entry.destroy()
+        if self.shift_entry:
+            self.shift_entry.destroy()
+        if self.wave_selector:
+            self.wave_selector.destroy()
+        
+    
+        self.amp_label = tk.Label(self.root, text="Amplitude:")
+        self.amp_label.pack(pady=5, side="top")
+        self.amp_entry = tk.Entry(self.root)
+        self.amp_entry.pack(pady=5)
+
+        self.analog_freq_label = tk.Label(self.root, text="Analog Frequency:")
+        self.analog_freq_label.pack(pady=5, side="top")
+        self.analog_freq_entry = tk.Entry(self.root)
+        self.analog_freq_entry.pack(pady=5)
+
+        self.sampling_freq_label = tk.Label(self.root, text="Sampling Frequency:")
+        self.sampling_freq_label.pack(pady=5, side="top")
+        self.sampling_freq_entry = tk.Entry(self.root)
+        self.sampling_freq_entry.pack(pady=5)
+
+        self.shift_label = tk.Label(self.root, text="Phase Shift:")
+        self.shift_label.pack(pady=5, side="top")
+        self.shift_entry = tk.Entry(self.root)
+        self.shift_entry.pack(pady=5)
+
+        self.wave_type_label = tk.Label(self.root, text="Wave Type:")
+        self.wave_type_label.pack(pady=5, side="top")
+        self.wave_selector = ttk.Combobox(self.root, values=["Sin", "Cos"])
+        self.wave_selector.pack(pady=5)
+        self.wave_selector.current(0)  
+
+        self.amp_entry.bind("<KeyRelease>", lambda event: self.check_inputs())  
+        self.sampling_freq_entry.bind("<KeyRelease>", lambda event: self.check_inputs())  
+        self.analog_freq_entry.bind("<KeyRelease>", lambda event: self.check_inputs())  
+        self.shift_entry.bind("<KeyRelease>", lambda event: self.check_inputs())  
+
+        self.check_inputs()
+
+
+   
+            
+
+
+         
+
+     
+
+   
+
+
+    def run(self):
+        """Execute the selected operations on the uploaded files and plot the results."""
+        operation_key = self.selected_operation.lower()  
+
+        result = None
+
+        if self.selected_operation in ["Add", "Subtract"]:
+            files = list(self.file_data.values())
+            signal1, signal2 = files[0], files[1]
+
+            if self.selected_operation == "Add":
+                result = self.plus_signal(signal1, signal2)
+                self.create_rectangle("add_result", "Add Result")
+            elif self.selected_operation == "Subtract":
+                result = self.minus_signal(signal1, signal2)
+                self.create_rectangle("subtract_result", "Subtract Result")
+        elif self.selected_operation == "Generate Signal":
+            result = self.generate_signal()
+            self.create_rectangle("generate_result", "Generated Signal Result")
+        else:
+          
+            signal1 = list(self.file_data.values())[0]
+
+            if self.selected_operation == "Multiply":
+                multiplier = simpledialog.askfloat("Multiply", "Enter the multiplier:", initialvalue=1.0)
+                multiplier = multiplier if multiplier else 1.0
+                result = self.multisignal(signal1, multiplier)
+                self.create_rectangle("multiply_result", f"Multiply Result x{multiplier}")
+            elif self.selected_operation == "Normalize from -1 to 1":
+                result = self.normalization_11(signal1)
+                self.create_rectangle("normalize_result", "Normalize Result")
+            elif self.selected_operation == "Normalize from 0 to 1":
+                result = self.normalization01(signal1)
+                self.create_rectangle("normalize_result", "Normalize Result")
+            elif self.selected_operation == "Squaring":
+                result = self.squaresignal(signal1)
+                self.create_rectangle("squaring_result", "Squaring Result")
+            elif self.selected_operation == "Accumulation":
+                result = self.accumulate_signal(signal1)
+                self.create_rectangle("accumulate_result", "Accumulation Result")
+            elif self.selected_operation == "Plot Signal":
+                result = signal1
+                self.create_rectangle("plot_result", "Plot Result")
+
+        if result is not None:
+            self.results[operation_key] = result
+
+            if self.selected_operation == "Generate Signal":
+                self.plot_result(result, plot_type="stem", apply_xlim=True)
+                self.plot_result(result, plot_type="line", apply_xlim=True)
+            else:
+                self.plot_result(result, plot_type="stem")
+                self.plot_result(result, plot_type="line")
+            expected_file = self.expected_file_map.get(self.selected_operation)
+            if expected_file:
+                self.compare_results(expected_file, result)
+
+
+
+
+
+
+    def compare_results(self, expected_file_name, result):
+        """Compare the output results with expected values."""
+        indices = result[0].tolist()
+        samples = result[1].tolist()
+        SignalSamplesAreEqual(expected_file_name, indices, samples)
+
+    
+    def plot_result(self, data, plot_type="stem" ,apply_xlim=False):
+        """
+        Plot the result of the operation using either a 'stem' plot or a 'line' plot.
+        
+        :param data: A tuple containing the x and y values of the signal.
+        :param plot_type: The type of plot to display, either "stem" (default) or "line".
+        """
+        plt.figure(figsize=(5, 3))
+        
+        if plot_type == "stem":
+            plt.stem(data[0], data[1], basefmt=" ", linefmt='b-', markerfmt='bo')
+        elif plot_type == "line":
+            plt.plot(data[0], data[1], marker='o', linestyle='-', color='b', label="Connected Points")  # Line plot
+            plt.legend()
+        else:
+            raise ValueError("plot_type must be either 'stem' or 'line'")
+
+        plt.title(f"{self.selected_operation} Result")
+        plt.xlabel("Index")
+        if apply_xlim:
+           plt.xlim(0, 0.01)
+        plt.ylabel("Value")
+        plt.grid(True)
+        plt.show()
+
+        
+
+ 
+    def accumulate_signal(self, signal1):
+        accumulated_signal = np.cumsum(signal1.iloc[:, 1])
+        return signal1.iloc[:, 0], accumulated_signal
+    
+    
+
+    def normalization_11(self ,signal1):
+        min_val = np.min(signal1.iloc[:, 1])
+        max_val = np.max(signal1.iloc[:, 1])
+        
+    
+        if max_val == min_val:
+            return signal1.iloc[:, 0], np.zeros(signal1.shape[0])
+        
+        
+        signal = 2 * ((signal1.iloc[:, 1] - min_val) / (max_val - min_val)) - 1
+        return signal1.iloc[:, 0], signal
+
+
+
+
+    def normalization01(self ,signal1):
+        signal = (signal1.iloc[:, 1] - np.min(signal1.iloc[:, 1])) / (np.max(signal1.iloc[:, 1]) - np.min(signal1.iloc[:, 1]))
+        return signal1.iloc[:, 0], signal
+
+    def multisignal(self ,signal1, num):
+        return signal1.iloc[:, 0], signal1.iloc[:, 1] * num
+    
+    def squaresignal(self, signal1):
+        return signal1.iloc[:, 0], np.square(signal1.iloc[:, 1])
+
+    def plus_signal(self ,signal1, signal2):
+        return signal1.iloc[:, 0], signal1.iloc[:, 1] + signal2.iloc[:, 1]
+
+    def minus_signal(self ,signal1, signal2):
+        return signal1.iloc[:, 0],np.abs(signal1.iloc[:, 1] - signal2.iloc[:, 1])
+
+
+
+
+    def generate_signal(self):
+        """Generate the signal and plot it based on input fields."""
+        try:
+            amplitude = float(self.amp_entry.get())
+            analog_freq = float(self.analog_freq_entry.get())
+            sampling_freq = float(self.sampling_freq_entry.get())
+            if sampling_freq < 2 * analog_freq:
+                messagebox.showerror("Error", "According to the Sampling theorem the sampling rate must be at least 2 times the highest frequency contained in the signal")
+                self.run_button.config(state=tk.DISABLED)
+            phase_shift = float(self.shift_entry.get())
+            wave_type = self.wave_selector.get()
+            if wave_type == "Sin":
+                t, y = generate_sin_wave_digital(amplitude, analog_freq, sampling_freq, phase_shift)
+            else:
+                t, y = generate_cos_wave_digital(amplitude, analog_freq, sampling_freq, phase_shift)
+            return t,y
+        except ValueError:
+            messagebox.showerror("Input Error", "Please enter valid numerical values for all fields.")
+
+
+    def check_inputs(self):
+        try:
+            analog_freq_value = float(self.analog_freq_entry.get())
+            sampling_freq_value = float(self.sampling_freq_entry.get())
+            amplitude_value = float(self.amp_entry.get())
+            phase_shift_value = float(self.shift_entry.get())
+
+            if sampling_freq_value >= 2 * analog_freq_value:
+                self.run_button.config(state=tk.NORMAL)
+            else:
+                self.run_button.config(state=tk.DISABLED)
+                messagebox.showerror("Error", "According to the Sampling theorem the sampling rate must be at least 2 times the highest frequency contained in the signal")
+        except ValueError:
+            self.run_button.config(state=tk.DISABLED)
+
+
+
+
+def generate_sin_wave_digital(A, AnalogFrequency, SamplingFrequency, PhaseShift, duration=1):
+    n=int(SamplingFrequency * duration)
+    t = np.arange(n) / SamplingFrequency
+    digital_signal  = A * np.sin(2 * np.pi * AnalogFrequency * t + PhaseShift)
+    return t, digital_signal
+
+def generate_cos_wave_digital(A, AnalogFrequency, SamplingFrequency, PhaseShift, duration=1):
+    n=int(SamplingFrequency * duration)
+    t = np.arange(n) / SamplingFrequency
+    digital_signal  = A * np.cos(2 * np.pi * AnalogFrequency * t + PhaseShift)
+    return t, digital_signal
+
+
+
+def SignalSamplesAreEqual(file_name, indices, samples):
+    expected_indices = []
+    expected_samples = []
+    with open(file_name, 'r') as f:
+        line = f.readline()
+        line = f.readline()
+        line = f.readline()
+        line = f.readline()
+        while line:
+            L = line.strip()
+            if len(L.split(' ')) == 2:
+                L = line.split(' ')
+                V1 = int(L[0])
+                V2 = float(L[1])
+                expected_indices.append(V1)
+                expected_samples.append(V2)
+                line = f.readline()
+            else:
+                break
+    if len(expected_samples) != len(samples):
+        print("Test case failed, your signal has a different length from the expected one")
+        return
+    for i in range(len(expected_samples)):
+        if abs(samples[i] - expected_samples[i]) < 0.01:
+            continue
+        else:
+            print("Test case failed, your signal has different values from the expected one")
+            return
+    print("Test case passed successfully")
+
+
+if _name_ == "_main_":
+    root = tk.Tk()
+    app = SignalProcessorApp(root)
+    root.geometry("800x600")
+    root.mainloop()
