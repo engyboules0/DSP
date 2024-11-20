@@ -1,0 +1,283 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from tkinter import Tk, Label, Button, filedialog, Text, Scrollbar, Frame, Entry, END, messagebox, IntVar, Radiobutton
+
+def fold_signal(y):
+    """Fold the y-axis of the signal."""
+    return y[::-1]
+
+def shift_signal(x, shift_steps):
+    """Shift the x-axis of the signal."""
+    return x + shift_steps
+
+def shift_and_fold_signal(x, y, shift_steps):
+    """
+    Shift the x-axis and fold the y-axis of a signal.
+
+    Parameters:
+        x (array-like): The x-axis values.
+        y (array-like): The original y-axis values.
+        shift_steps (int): The number of steps to shift the x-axis.
+
+    Returns:
+        tuple: Shifted x-axis values and folded y-axis values.
+    """
+    shifted_x = shift_signal(x, shift_steps)
+    folded_y = fold_signal(y)
+    return shifted_x, folded_y
+
+def process_signal(file_path, shift_steps, operation):
+    """
+    Reads a signal from a file and processes it based on the selected operation.
+
+    Parameters:
+        file_path (str): Path to the text file containing the signal data.
+        shift_steps (int): Number of steps to shift the x-axis after folding (if applicable).
+        operation (int): Operation type (1 = Fold only, 2 = ShiftFold, 3 = Shift only).
+
+    Returns:
+        tuple: Original x, y values and processed x, y values.
+    """
+    x, y = [], []
+
+    try:
+        with open(file_path, 'r') as file:
+            for line in file:
+                parts = line.strip().split()
+                if len(parts) == 2:
+                    try:
+                        x_value, y_value = float(parts[0]), float(parts[1])
+                        x.append(x_value)
+                        y.append(y_value)
+                    except ValueError:
+                        print(f"Skipping invalid row: {line.strip()}")
+
+        # Convert lists to numpy arrays
+        x = np.array(x)
+        y = np.array(y)
+
+        if operation == 1:  # Fold only
+            processed_y = fold_signal(y)
+            return x, y, x, processed_y
+        elif operation == 2:  # Shift and Fold
+            shifted_x, folded_y = shift_and_fold_signal(x, y, shift_steps)
+            return x, y, shifted_x, folded_y
+        elif operation == 3:  # Shift only
+            shifted_x = shift_signal(x, shift_steps)
+            return x, y, shifted_x, y
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None, None, None, None
+
+def plot_signals(x, y, processed_x, processed_y, operation):
+    """
+    Plots the original and processed signals.
+
+    Parameters:
+        x (array-like): The original x-axis values.
+        y (array-like): The original y-axis values.
+        processed_x (array-like): The processed x-axis values.
+        processed_y (array-like): The processed y-axis values.
+        operation (int): Operation type (1 = Fold only, 2 = ShiftFold, 3 = Shift only).
+    """
+    plt.figure(figsize=(12, 6))
+
+    # Plot processed signal on the left
+    plt.subplot(1, 2, 1)
+    if operation == 1:
+        title = "Folded Signal"
+    elif operation == 2:
+        title = "Shifted and Folded Signal"
+    elif operation == 3:
+        title = "Shifted Signal"
+    plt.plot(processed_x, processed_y, label=title, marker='o', color='orange')
+    plt.title(title)
+    plt.xlabel("x-axis")
+    plt.ylabel("y-axis")
+    plt.grid(True)
+    plt.legend()
+
+    # Plot original signal on the right
+    plt.subplot(1, 2, 2)
+    plt.plot(x, y, label="Original Signal", marker='o')
+    plt.title("Original Signal")
+    plt.xlabel("x-axis")
+    plt.ylabel("y-axis")
+    plt.grid(True)
+    plt.legend()
+
+    plt.tight_layout()
+    plt.show()
+
+def browse_file(file_entry):
+    """
+    Opens a file dialog to select a file and updates the file path in the file_entry widget.
+    """
+    file_path = filedialog.askopenfilename(filetypes=[("Text Files", "*.txt")])
+    file_entry.delete(0, END)
+    file_entry.insert(0, file_path)
+
+def browse_compare_file(compare_file_entry):
+    """
+    Opens a file dialog to select a file for comparison and updates the file path in the compare_file_entry widget.
+    """
+    compare_file_path = filedialog.askopenfilename(filetypes=[("Text Files", "*.txt")])
+    compare_file_entry.delete(0, END)
+    compare_file_entry.insert(0, compare_file_path)
+
+def enter_file(output_text, shift_entry, operation_var, file_entry):
+    """
+    Processes the signal based on user input file path, shift steps, and selected operation.
+
+    Parameters:
+        output_text (Text): The text widget to display results.
+        shift_entry (Entry): Entry widget for the shift steps.
+        operation_var (IntVar): The variable storing the selected operation type.
+        file_entry (Entry): The entry widget where the user inputs the file path.
+    """
+    file_path = file_entry.get()
+    
+    if not file_path:
+        messagebox.showerror("Invalid Input", "Please enter a valid file path.")
+        return
+
+    try:
+        shift_steps = int(shift_entry.get()) if operation_var.get() in [2, 3] else 0
+    except ValueError:
+        messagebox.showerror("Invalid Input", "Please enter a valid integer for the shift steps.")
+        return
+
+    x, y, processed_x, processed_y = process_signal(file_path, shift_steps, operation_var.get())
+
+    if x is not None and y is not None and processed_x is not None and processed_y is not None:
+        # Clear previous output
+        output_text.delete(1.0, END)
+
+        # Display Original and Processed Signals Side by Side
+        output_text.insert(END, "Original Signal & Processed Signal:\n")
+        for i in range(len(x)):
+            # Only display the numbers (no 'x' or 'y' labels)
+            output_text.insert(END, f"{int(x[i])}, {int(y[i])}  -->  {int(processed_x[i])}, {int(processed_y[i])}\n")
+
+        # Plot the signals
+        plot_signals(x, y, processed_x, processed_y, operation_var.get())
+    else:
+        output_text.insert(END, "Failed to process the signal. Please check the file format.\n")
+
+def compare_signals(compare_file_entry, shift_entry, operation_var, file_entry):
+    """
+    Compares the processed signal with the expected signal from the compare file.
+
+    Parameters:
+        compare_file_entry (Entry): Entry widget where the user inputs the compare file path.
+        shift_entry (Entry): Entry widget for the shift steps.
+        operation_var (IntVar): The variable storing the selected operation type.
+        file_entry (Entry): The entry widget where the user inputs the file path.
+    """
+    compare_file_path = compare_file_entry.get()
+
+    if not compare_file_path:
+        messagebox.showerror("Invalid Input", "Please enter a valid compare file path.")
+        return
+
+    try:
+        shift_steps = int(shift_entry.get()) if operation_var.get() in [2, 3] else 0
+    except ValueError:
+        messagebox.showerror("Invalid Input", "Please enter a valid integer for the shift steps.")
+        return
+
+    # Process the signal from the main file
+    file_path = file_entry.get()
+    x, y, processed_x, processed_y = process_signal(file_path, shift_steps, operation_var.get())
+
+    # Compare the processed signal with the expected signal from the comparison file
+    Shift_Fold_Signal(compare_file_path, processed_x, processed_y)
+
+def Shift_Fold_Signal(file_name, Your_indices, Your_samples):      
+    expected_indices=[]
+    expected_samples=[]
+    with open(file_name, 'r') as f:
+        line = f.readline()
+        line = f.readline()
+        line = f.readline()
+        line = f.readline()
+        while line:
+            # process line
+            L=line.strip()
+            if len(L.split(' '))==2:
+                L=line.split(' ')
+                V1=int(L[0])
+                V2=float(L[1])
+                expected_indices.append(V1)
+                expected_samples.append(V2)
+                line = f.readline()
+            else:
+                break
+    print("Current Output Test file is: ")
+    print(file_name)
+    print("\n")
+    if (len(expected_samples)!=len(Your_samples)) and (len(expected_indices)!=len(Your_indices)):
+        print("Shift_Fold_Signal Test case failed, your signal have different length from the expected one")
+        return
+    for i in range(len(Your_indices)):
+        if(Your_indices[i]!=expected_indices[i]):
+            print("Shift_Fold_Signal Test case failed, your signal have different indicies from the expected one") 
+            return
+    for i in range(len(Your_samples)):
+        if(Your_samples[i]!=expected_samples[i]):
+            print("Shift_Fold_Signal Test case failed, your signal have different values from the expected one") 
+            return
+    print("Shift_Fold_Signal Test case passed successfully") 
+    return 
+
+def create_gui():
+    """Creates the GUI for the signal processing application."""
+    root = Tk()
+    root.title("Signal Processing Application")
+    
+    # Layout for the file input
+    file_frame = Frame(root)
+    file_frame.pack(pady=10)
+    Label(file_frame, text="Signal File:").grid(row=0, column=0)
+    file_entry = Entry(file_frame, width=50)
+    file_entry.grid(row=0, column=1)
+    Button(file_frame, text="Browse", command=lambda: browse_file(file_entry)).grid(row=0, column=2)
+
+    # Layout for the comparison file input
+    compare_frame = Frame(root)
+    compare_frame.pack(pady=10)
+    Label(compare_frame, text="Compare File:").grid(row=0, column=0)
+    compare_file_entry = Entry(compare_frame, width=50)
+    compare_file_entry.grid(row=0, column=1)
+    Button(compare_frame, text="Browse", command=lambda: browse_compare_file(compare_file_entry)).grid(row=0, column=2)
+
+    # Shift input
+    shift_label = Label(root, text="Shift Steps:")
+    shift_label.pack(pady=5)
+    shift_entry = Entry(root)
+    shift_entry.pack()
+
+    # Operation selection
+    operation_var = IntVar()
+    Radiobutton(root, text="Fold only", variable=operation_var, value=1).pack()
+    Radiobutton(root, text="Shift and Fold", variable=operation_var, value=2).pack()
+    Radiobutton(root, text="Shift only", variable=operation_var, value=3).pack()
+
+    # Output text area
+    output_frame = Frame(root)
+    output_frame.pack(pady=10)
+    output_text = Text(output_frame, width=60, height=10)
+    output_text.pack()
+    scrollbar = Scrollbar(output_frame, command=output_text.yview)
+    scrollbar.pack(side="right", fill="y")
+    output_text.config(yscrollcommand=scrollbar.set)
+
+    # Buttons
+    Button(root, text="Process Signal", command=lambda: enter_file(output_text, shift_entry, operation_var, file_entry)).pack(pady=5)
+    Button(root, text="Compare Signals", command=lambda: compare_signals(compare_file_entry, shift_entry, operation_var, file_entry)).pack(pady=5)
+
+    root.mainloop()
+
+if __name__ == "__main__":
+    create_gui()
