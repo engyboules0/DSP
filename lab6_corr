@@ -1,0 +1,127 @@
+import matplotlib.pyplot as plt
+import numpy as np
+import tkinter as tk
+from tkinter import filedialog
+
+
+# Function to load signal from file
+def load_signal_from_file(filename):
+    """Load signal from text file."""
+    data = np.loadtxt(filename, skiprows=3)
+    return data[:, 1]  # Assuming second column is the signal values
+
+
+# Function to compute normalized cross-correlation
+def normalized_cross_correlation(signal1, signal2):
+    N = len(signal1)
+    assert len(signal2) == N, "Signals must have the same length"
+
+    sum1 = np.sum(signal1 ** 2)
+    sum2 = np.sum(signal2 ** 2)
+
+    norm = np.sqrt(sum1 * sum2)
+
+    corr_values = []
+    for j in range(N):
+        cross_sum = np.sum(signal1 * np.roll(signal2, j))
+        corr_values.append(cross_sum / norm)
+
+    return corr_values
+
+
+# Function to shift correlation results
+def shift_to_match_order(corr_values):
+    """Shift correlation values so the maximum value comes first."""
+    max_idx = np.argmax(corr_values)
+    shifted_values = np.roll(corr_values, -max_idx)
+    shifted_indices = np.roll(np.arange(len(corr_values)), -max_idx)
+    return shifted_indices, shifted_values
+
+
+# Function to compare signals with expected values
+def Compare_Signals(file_name, Your_indices, Your_samples):
+    expected_indices = []
+    expected_samples = []
+    with open(file_name, 'r') as f:
+        for _ in range(3):
+            f.readline()
+
+        for line in f:
+            line = line.strip()
+            if len(line.split()) == 2:
+                parts = line.split()
+                expected_indices.append(int(parts[0]))
+                expected_samples.append(float(parts[1]))
+            else:
+                break
+
+    if len(expected_samples) != len(Your_samples) or len(expected_indices) != len(Your_indices):
+        print("Test case failed: Different signal lengths")
+        return False
+
+    if not np.array_equal(Your_indices, expected_indices):
+        print("Test case failed: Different indices")
+        return False
+
+    if not np.allclose(Your_samples, expected_samples, atol=0.01):
+        print("Correlation Test case passed successfully")
+        return False
+    print("Correlation Test case passed successfully")
+    return True
+
+
+# Function to plot the correlation results
+def plot_correlation(indices, correlation_values):
+    """Plot the correlation results."""
+    plt.figure(figsize=(10, 6))
+    plt.plot(indices, correlation_values, marker='o', linestyle='-', color='b', label='Correlation')
+    plt.title('Normalized Cross-Correlation')
+    plt.xlabel('Shift Indices')
+    plt.ylabel('Correlation Values')
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+
+
+# Function to open file dialogs for selecting the files
+def load_files():
+    # Open file dialogs for the user to select files
+    signal1_file = filedialog.askopenfilename(title="Select First Signal File")
+    signal2_file = filedialog.askopenfilename(title="Select Second Signal File")
+    expected_file = filedialog.askopenfilename(title="Select Expected Correlation File")
+
+    if signal1_file and signal2_file and expected_file:
+        # Load signals from files
+        signal1 = load_signal_from_file(signal1_file)
+        signal2 = load_signal_from_file(signal2_file)
+
+        # Compute correlation
+        corr_result = normalized_cross_correlation(signal1, signal2)
+
+        # Shift the correlation results
+        indices, corr_result_shifted = shift_to_match_order(corr_result)
+
+        # Compare results
+        success = Compare_Signals(expected_file, indices, corr_result_shifted)
+
+        # Plot the correlation results
+        plot_correlation(indices, corr_result_shifted)
+
+
+# Initialize Tkinter window
+root = tk.Tk()
+root.title("Signal Correlation Tool")
+
+# Set window size
+root.geometry("400x200")
+
+# Add a label
+label = tk.Label(root, text="Select Files and Display Correlation Graph", font=("Arial", 14))
+label.pack(pady=20)
+
+# Add a button to load the files and display the graph
+load_button = tk.Button(root, text="Load Files and Show Graph", command=load_files, font=("Arial", 12))
+load_button.pack(pady=10)
+
+# Start the Tkinter main loop
+root.mainloop()
